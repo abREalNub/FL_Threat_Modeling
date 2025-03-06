@@ -1,23 +1,14 @@
 from copy import deepcopy
 import copy
-
-import numpy as np
 import torch.cuda
-from flex.data import Dataset, FedDatasetConfig, FedDataDistribution
-from flex.datasets import load
-from flex.pool import init_server_model, deploy_server_model, collect_clients_weights, set_aggregated_weights, \
-    aggregate_weights
+from flex.pool import init_server_model, deploy_server_model, aggregate_weights
 from flex.pool import FlexPool
 from flex.model import FlexModel
-import matplotlib.pyplot as plt
-import tensorly as tl
 from PIL import Image
-from tqdm import tqdm
 from process_data import *
-from networks_models import *
 from networks_execution import *
 from flexclash.data import data_poisoner_all
-from flexclash.pool import central_differential_privacy, median, bulyan
+from flexclash.pool import central_differential_privacy, median, bulyan, trimmed_mean, multikrum
 from poison_attack_evaluator import generate_bad_data_for_test, evaluate_model_with_poison_data, \
     data_poison_evaluator_pt
 from attack import bad_net as bn
@@ -26,6 +17,7 @@ import argparse
 from flex.pool import set_aggregated_diff_weights_pt
 from flex.pool import collect_client_diff_weights_pt
 from flex.pool import fed_avg
+import tensorly as tl
 
 parser = argparse.ArgumentParser(description='Trying to reproduce the basic backdoor attack in "BadNets:___" into a '
                                              'federated learning model')
@@ -223,6 +215,17 @@ def train(client_flex_model: FlexModel, client_data: Dataset):
 # aggregators.map(collect_client_diff_weights_pt, selected_clients)
 
 # Aggregate weights
+
+@aggregate_weights
+def aggregate_with_fedavg(list_of_weights: list):
+    agg_weights = []
+    for layer_index in range(len(list_of_weights[0])):
+        weights_per_layer = [weights[layer_index] for weights in list_of_weights]
+        weights_per_layer = tl.stack(weights_per_layer)
+        agg_layer = tl.mean(weights_per_layer, axis=0)
+        agg_weights.append(agg_layer)
+    return agg_weights
+
 # aggregators.map(fed_avg)
 
 # aggregators.map(set_aggregated_diff_weights_pt, servers)
@@ -334,9 +337,6 @@ Modificar de acuerdo al ataque o hacer una copia del metodo
 
 
 def train_n_rounds(n_rounds, clients_per_round=10):
-    from flex.pool import set_aggregated_diff_weights_pt
-    from flex.pool import collect_client_diff_weights_pt
-    from flex.pool import fed_avg
 
     for i in range(n_rounds):
         print(f"\nRunning round: {i + 1} of {n_rounds}")

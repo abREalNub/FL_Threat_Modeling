@@ -28,7 +28,7 @@ class ExecutionNetwork():
     def for_fd_server_model_config(self):
         return self.criterion, self.model, self.optimizer
     
-    def trainNetwork(self, local_epochs, criterion, optimizer, momentum = 0.9, lr = 0.01, trainloader = None, testloader = None, model = None):
+    def train_network(self, local_epochs, criterion, optimizer, momentum = 0.9, lr = 0.01, trainloader = None, testloader = None, model = None):
         self.model.train()
         for local_epoch in range(local_epochs):
             running_loss = 0.0
@@ -74,7 +74,7 @@ class ExecutionNetwork():
         #self.list_train_acc.append(train_acc)
         #print(self.list_train_acc)
     
-    def trainAdv(self, local_epochs, criterion, optimizer, momentum = 0.9, lr = 0.01, trainloader = None, testloader = None, model = None):
+    def train_adv(self, local_epochs, criterion, optimizer, momentum = 0.9, lr = 0.01, trainloader = None, testloader = None, model = None):
         self.model.train()
         for local_epoch in range(local_epochs):
             running_loss = 0.0
