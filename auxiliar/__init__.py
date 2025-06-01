@@ -1,0 +1,1 @@
+from .extract_images import extract_digits_from_directory

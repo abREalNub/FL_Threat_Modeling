@@ -43,32 +43,7 @@ device = (
     if torch.backends.mps.is_available()
     else "cpu"
 )
-"""
-cifar_transforms = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
 
-training_data = datasets.CIFAR10(
-    root=".", train=True, download=False, transform=None
-)
-
-test_data = datasets.CIFAR10(
-    root=".", train=True, download=False, transform=None
-)
-
-config = FedDatasetConfig(seed=0)
-config.replacement = False
-config.n_nodes = 100
-
-flex_dataset = FedDataDistribution.from_config(
-    centralized_data=Dataset.from_torchvision_dataset(training_data), config= config
-)
-
-# Assign test data to server_id
-server_id = "server"
-flex_dataset[server_id] = Dataset.from_torchvision_dataset(test_data)
-"""
 
 flex_dataset, server_id = load_and_preprocess_horizontal(dataname="mnist", trasnform=False, nodes=10)
 
@@ -200,7 +175,7 @@ def train(client_flex_model: FlexModel, client_data: Dataset):
     optimizer = client_flex_model["optimizer_func"]
     criterion = client_flex_model["criterion"]
 
-    net_config.trainNetwork(local_epochs=1, criterion=criterion, optimizer=optimizer, momentum=0.9, lr=0.005,
+    net_config.train_network(local_epochs=1, criterion=criterion, optimizer=optimizer, momentum=0.9, lr=0.005,
                             trainloader=client_dataloader, testloader=None,
                             model=model)
 
@@ -331,9 +306,6 @@ def clean_up(client_model: FlexModel, _):
 
 
 # Summing up
-"""
-Modificar de acuerdo al ataque o hacer una copia del metodo
-"""
 
 
 def train_n_rounds(n_rounds, clients_per_round=10):

@@ -1,90 +1,82 @@
-import matplotlib.pyplot as plt
-from flex.data import FedDataDistribution, FedDatasetConfig, Dataset
-from torchvision import datasets, transforms
-import tarfile
-import numpy as np
-import torch
-import os
-import pickle
-from torch import nn as nn, optim
+from process_data import *
+from copy import deepcopy
+
+from networks_models import *
+from networks_execution import *
+from flex.pool import init_server_model
+from flex.model import FlexModel
+
+from flex.pool import FlexPool
+from flex.model import FlexModel
+from flex.actors.actors import FlexActors
+from flex.data import FedDataset
 
 device = (
     "cuda"
     if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu"
+    else "mps" if torch.backends.mps.is_available() else "cpu"
 )
 
-cifar_transforms = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
 
-training_data = datasets.CIFAR10(
-    root=".", train=True, download=False, transform=cifar_transforms
-)
-
-test_data = datasets.CIFAR10(
-    root=".", train=True, download=False, transform=None
-)
-
-config = FedDatasetConfig(seed=0)
-config.replacement = False
-config.n_nodes = 100
-
-flex_dataset = FedDataDistribution.from_config(
-    centralized_data=Dataset.from_torchvision_dataset(training_data), config= config
-)
-
-figure = plt.figure(figsize=(8,8))
-cols, rows = 32, 32
-for i in range(1, cols * rows + 1):
-    sample = torch.randint(len(training_data), size=(1,)).item()
-    img, label = training_data[sample]
-    figure.add_subplot(rows, cols, i)
-    plt.axis("off")
-    plt.imshow(img.permute(1, 2, 0), cmap="gray")
-plt.show()
-#Federating process
+def verif_in_fr(list_fr, all_clients):
+    for actor_ids in all_clients.actor_ids:
+        if actor_ids in list_fr:
+            return True
+    return False
 
 
+def util_for_fr(list_of_fr, all_clients):
+    normal_clients = all_clients
+    free_riding_clients = None
+
+    if verif_in_fr(list_of_fr, all_clients):
+        actors = FlexActors()
+        models = {}
+        new_data = FedDataset()
+
+        actors_fr = FlexActors()
+        models_fr = {}
+        new_data_fr = FedDataset()
+
+        def asing_client(place, id, from_the):
+            place[id] = from_the[id]
+
+        for actor_ids in all_clients.actor_ids:
+            if actor_ids in list_of_fr:
+                asing_client(actors_fr, actor_ids, all_clients._actors)
+                asing_client(models_fr, actor_ids, all_clients._models)
+                asing_client(new_data_fr, actor_ids, all_clients._data)
+            elif actor_ids not in list_of_fr:
+                asing_client(actors, actor_ids, all_clients._actors)
+                asing_client(models, actor_ids, all_clients._models)
+                asing_client(new_data, actor_ids, all_clients._data)
+            new_pool_c = FlexPool(flex_actors=actors, flex_data=new_data, flex_models=models)
+            new_pool_frc = FlexPool(flex_actors=actors_fr, flex_data=new_data_fr, flex_models=models_fr)
+            normal_clients = new_pool_c.clients
+            free_riding_clients = new_pool_frc.clients
+
+    return normal_clients, free_riding_clients
 
 
+def util_for_fr_join_all(clients_fr, clients, all_clients):
+    clients_to_aggregate = []
+    actors = FlexActors()
+    models = {}
+    new_data = FedDataset()
 
+    def asing_client(place, id, from_the):
+        place[id] = from_the[id]
 
+    for actor_ids in all_clients.actor_ids:
+        if actor_ids in clients_fr:
+            asing_client(actors, actor_ids, clients_fr._actors)
+            asing_client(models, actor_ids, clients_fr._models)
+            asing_client(new_data, actor_ids, clients_fr._data)
+        elif actor_ids not in clients_fr:
+            asing_client(actors, actor_ids, clients._actors)
+            asing_client(models, actor_ids, clients._models)
+            asing_client(new_data, actor_ids, clients._data)
+        clientss = FlexPool(flex_actors=actors, flex_data=new_data, flex_models=models)
+        clients_to_aggregate = clientss.clients
 
-
-
-
-
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(28 * 28, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, 10),
-        )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
-
-
-model = Net().to(device)
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-num_epochs = 2
-
-"""
-fcd_torch = Dataset.from_torchvision_dataset(dataset)
-
-config_torch = FedDatasetConfig(seed=0, n_nodes=2, replacement=False)
-
-"""
+    return clients_to_aggregate
