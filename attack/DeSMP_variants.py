@@ -79,47 +79,4 @@ def desmp_attack_1(agent_updates_dict, sigma, sensitivity, num_corrupt, agent_id
     return agent_updates_dict
 
 
-@aggregate_weights
-def despm_attack_variant_2(list_of_weights, l2_clip=1, noise_multiplier=0.1, attack_strength=0.1):
-    """
-      Implementa el ataque DeSMP manipulando el ruido DP dentro de la agregación central.
 
-      - list_of_weights: Lista de actualizaciones de los clientes.
-      - l2_clip: Factor de recorte para el Norm Clipping.
-      - noise_multiplier: Factor de escala para el ruido DP.
-      - attack_strength: Intensidad del ataque (ajustar entre 0.1 y 1).
-
-      Retorna la lista de pesos manipulada con ruido DP adversarial.
-      """
-    num_clients = len(list_of_weights)
-
-    # Aplicación de Norm Clipping en cada cliente
-    for i in range(num_clients):
-        valid_weights = [w for w in list_of_weights[i] if w is not None]  # Filtrar valores incorrectos
-
-        tmp_dist = sum([(tl.norm(w) ** 2).item() for w in valid_weights])  # Convertir a número
-        l2_norm = sqrt(tmp_dist) + 1e-12
-        clip_ratio = min(1, l2_clip / l2_norm)
-
-        # Modificación de actualización maliciosa en clientes seleccionados
-        if np.random.rand() < attack_strength:  # Se activa aleatoriamente el ataque
-            clip_ratio *= (1 + attack_strength)  # Aumenta sutilmente el peso para influir en el modelo
-
-        for j, w in enumerate(list_of_weights[i]):
-            context = tl.context(w)
-            clip_ratio = tl.tensor(clip_ratio, **context)
-            list_of_weights[i][j] = w * clip_ratio
-
-    # Agregación estándar con FedAvg
-    agg_weights = fed_avg_f(list_of_weights)
-
-    # Introducción de ruido DP malicioso
-    noise_ratio = l2_clip * noise_multiplier / num_clients
-    for i, w in enumerate(agg_weights):
-        context = tl.context(agg_weights[i])
-        adversarial_noise = tl.tensor(
-            normal(loc=noise_ratio * attack_strength, scale=noise_ratio, size=tl.shape(w)), **context
-        )
-        agg_weights[i] = w + adversarial_noise  # Inyección de ruido malicioso
-
-    return agg_weights
